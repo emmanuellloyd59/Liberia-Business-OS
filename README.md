@@ -16,7 +16,7 @@ A Flask platform foundation for business registration applications, administrato
 - One-way application review decisions: approved/rejected records cannot be silently overwritten.
 - Interactive CLI command to create the first administrator.
 
-This is an early development milestone, not a claim of production certification. Email verification, password recovery, document storage, notifications, payment processing, formal registration integrations, and full audit trails remain future work. Configure `RATELIMIT_STORAGE_URI` to a shared Redis-compatible service in production; the default in-memory backend is intended for local development and is not shared between worker processes.
+This is an early development milestone, not a claim of production certification. Email verification, password recovery, document storage, notifications, payment processing, formal registration integrations, and full audit trails remain future work. Production startup now refuses to run with the default in-memory rate-limit backend. Configure `RATELIMIT_STORAGE_URI` in Render with the private Redis-compatible connection URL from a shared Redis/Key Value service (use `rediss://` when TLS is required). Do not use a public endpoint or commit the URL. The Render Blueprint marks this variable as manually supplied and intentionally does not provision a potentially billable service automatically. Local development may continue using `memory://`.
 
 ## Local setup
 
@@ -45,7 +45,7 @@ The render.yaml file describes a Render web service and managed PostgreSQL datab
 
 1. Add persistent audit events for account and administrator actions.
 2. Add secure document upload/storage with file validation and access controls.
-3. Add email verification, account recovery, and rate limiting.
+3. Add email verification and account recovery (authentication endpoint rate limiting is implemented).
 4. Add categories, locations, search filters, and business profile management.
 5. Add notification workflows, reports, and operational dashboards.
 6. Add end-to-end PostgreSQL application tests and deployment smoke checks.
