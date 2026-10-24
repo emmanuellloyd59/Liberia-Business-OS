@@ -165,3 +165,17 @@ def test_production_rejects_sqlite_database():
                 "SQLALCHEMY_DATABASE_URI": "sqlite://",
             },
         )
+def test_production_rejects_in_memory_rate_limit_storage():
+    import pytest
+    from app import create_app
+
+    with pytest.raises(RuntimeError, match="shared Redis-compatible RATELIMIT_STORAGE_URI"):
+        create_app(
+            "production",
+            {
+                "SECRET_KEY": "configured-test-secret",
+                "SQLALCHEMY_DATABASE_URI": "postgresql+psycopg://test:test@localhost/test",
+                "RATELIMIT_STORAGE_URI": "memory://",
+            },
+        )
+
