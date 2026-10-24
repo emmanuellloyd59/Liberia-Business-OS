@@ -1,6 +1,7 @@
 from flask import Blueprint,abort,flash,redirect,render_template_string,request,url_for
 from flask_login import current_user,login_required,login_user,logout_user
 from flask_wtf import FlaskForm
+from markupsafe import escape
 from wtforms import StringField,PasswordField,SelectField,TextAreaField,SubmitField
 from wtforms.validators import DataRequired,Email,Length
 from .extensions import db
@@ -29,7 +30,7 @@ class ReviewForm(FlaskForm):
 def page(title,body): return render_template_string(PAGE,title=title,body=body)
 def field(form,name,**attrs):
     f=getattr(form,name)
-    return f'<label>{f.label.text}</label>{f(**attrs)}'+''.join(f'<p style="color:#b42318">{e}</p>' for e in f.errors)
+    return f'<label>{f.label.text}</label>{f(**attrs)}'+''.join(f'<p style="color:#b42318">{escape(e)}</p>' for e in f.errors)
 @bp.route("/auth/register",methods=["GET","POST"])
 def register():
     if current_user.is_authenticated: return redirect(url_for("main.dashboard"))
@@ -52,8 +53,7 @@ def login():
         user=User.query.filter_by(email=form.email.data.strip().lower()).first()
         if user and user.is_active and user.check_password(form.password.data):
             login_user(user)
-            nxt=request.args.get("next","")
-            return redirect(nxt if nxt.startswith("/") and not nxt.startswith("//") else url_for("main.dashboard"))
+            return redirect(url_for("main.dashboard"))
         flash("Email or password is incorrect.","danger")
     body=f'<section class="panel"><h1>Sign in</h1><form method="post">{form.hidden_tag()}{field(form,"email",class_="input",autocomplete="email")}{field(form,"password",class_="input",autocomplete="current-password")}{form.submit(class_="button")}</form><p>New here? <a href="/auth/register">Create an account</a></p></section>'
     return page("Sign in",body)
@@ -65,9 +65,10 @@ def logout():
 @login_required
 def dashboard():
     items=BusinessApplication.query.filter_by(owner_id=current_user.id).order_by(BusinessApplication.created_at.desc()).all()
-    body='<section class="panel"><h1>Welcome, '+current_user.full_name+'</h1><p>Manage your business applications and track their review status.</p><a class="button" href="/applications/new">New business application</a></section><section class="panel"><h2>Your applications</h2>'
+    body='<section class="panel"><h1>Welcome, '+str(escape(current_user.full_name))+'</h1><p>Manage your business applications and track their review status.</p><a class="button" href="/applications/new">New business application</a></section><section class="panel"><h2>Your applications</h2>'
     if not items: body+='<p>No applications yet. Submit your first business application to get started.</p>'
-    for x in items: body+=f'<article><h3>{x.business_name}</h3><p>{x.business_type} · {x.county} County</p><span class="status {x.status}">{x.status.title()}</span><p>{x.review_notes}</p></article><hr>'
+    for x in items:
+        body+=f'<article><h3>{escape(x.business_name)}</h3><p>{escape(x.business_type)} · {escape(x.county)} County</p><span class="status {x.status}">{x.status.title()}</span><p>{escape(x.review_notes)}</p></article><hr>'
     return page("Dashboard",body+'</section>')
 @bp.route("/applications/new",methods=["GET","POST"])
 @login_required
@@ -83,7 +84,8 @@ def directory():
     items=BusinessApplication.query.filter_by(status="approved").order_by(BusinessApplication.business_name.asc()).all()
     body='<section class="panel"><h1>Liberian business directory</h1><p>Only applications approved by administrators appear here.</p>'
     if not items: body+='<p>No approved businesses have been published yet.</p>'
-    for x in items: body+=f'<article><h2>{x.business_name}</h2><p>{x.business_type} · {x.county} County</p><p>{x.description}</p><span class="status approved">Approved</span></article><hr>'
+    for x in items:
+        body+=f'<article><h2>{escape(x.business_name)}</h2><p>{escape(x.business_type)} · {escape(x.county)} County</p><p>{escape(x.description)}</p><span class="status approved">Approved</span></article><hr>'
     return page("Business directory",body+'</section>')
 @bp.get("/admin/applications")
 @login_required
@@ -92,7 +94,8 @@ def admin_applications():
     items=BusinessApplication.query.order_by(BusinessApplication.created_at.asc()).all()
     body='<section class="panel"><h1>Applications for review</h1>'
     if not items: body+='<p>No applications to review.</p>'
-    for x in items: body+=f'<article><h2>{x.business_name}</h2><p>{x.business_type} · {x.county} County</p><p>Applicant: {x.owner.email}</p><span class="status {x.status}">{x.status.title()}</span> <a href="/admin/applications/{x.id}/review">Review</a></article><hr>'
+    for x in items:
+        body+=f'<article><h2>{escape(x.business_name)}</h2><p>{escape(x.business_type)} · {escape(x.county)} County</p><p>Applicant: {escape(x.owner.email)}</p><span class="status {x.status}">{x.status.title()}</span> <a href="/admin/applications/{x.id}/review">Review</a></article><hr>'
     return page("Admin review",body+'</section>')
 @bp.route("/admin/applications/<int:application_id>/review",methods=["GET","POST"])
 @login_required
@@ -101,5 +104,5 @@ def review(application_id):
     item=db.get_or_404(BusinessApplication,application_id); form=ReviewForm(status=item.status if item.status in {"approved","rejected"} else "approved",review_notes=item.review_notes)
     if form.validate_on_submit():
         item.status=form.status.data; item.review_notes=(form.review_notes.data or "").strip(); db.session.commit(); flash("Application review saved.","success"); return redirect(url_for("main.admin_applications"))
-    body=f'<section class="panel"><h1>Review {item.business_name}</h1><p>{item.business_type} · {item.county} County</p><p>{item.description}</p><form method="post">{form.hidden_tag()}{field(form,"status",class_="input")}{field(form,"review_notes",class_="input")}{form.submit(class_="button")}</form></section>'
+    body=f'<section class="panel"><h1>Review {escape(item.business_name)}</h1><p>{escape(item.business_type)} · {escape(item.county)} County</p><p>{escape(item.description)}</p><form method="post">{form.hidden_tag()}{field(form,"status",class_="input")}{field(form,"review_notes",class_="input")}{form.submit(class_="button")}</form></section>'
     return page("Review application",body)
