@@ -1,5 +1,6 @@
 from flask import Blueprint,abort,flash,redirect,render_template_string,request,url_for
 from flask_login import current_user,login_required,login_user,logout_user
+from sqlalchemy import update
 from sqlalchemy.exc import IntegrityError
 from flask_wtf import FlaskForm
 from markupsafe import escape
@@ -117,11 +118,24 @@ def review(application_id):
     if not current_user.is_admin: abort(403)
     item=db.get_or_404(BusinessApplication,application_id); form=ReviewForm(status=item.status if item.status in {"approved","rejected"} else "approved",review_notes=item.review_notes)
     if form.validate_on_submit():
-        if item.status != "pending":
+        # Make the pending -> final transition atomic. Two administrators can
+        # load the same pending record; a conditional UPDATE ensures only one
+        # decision can win, even when requests run concurrently.
+        result = db.session.execute(
+            update(BusinessApplication)
+            .where(
+                BusinessApplication.id == application_id,
+                BusinessApplication.status == "pending",
+            )
+            .values(
+                status=form.status.data,
+                review_notes=(form.review_notes.data or "").strip(),
+            )
+        )
+        if result.rowcount != 1:
+            db.session.rollback()
             flash("This application has already been reviewed. A new review decision cannot overwrite the original decision.", "warning")
             return redirect(url_for("main.admin_applications"))
-        item.status=form.status.data
-        item.review_notes=(form.review_notes.data or "").strip()
         db.session.commit()
         flash("Application review saved.","success")
         return redirect(url_for("main.admin_applications"))
