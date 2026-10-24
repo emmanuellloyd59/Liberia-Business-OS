@@ -16,13 +16,14 @@ def test_home_health(client):
     assert response.status_code == 200 and response.json["status"] == "ok"
 
 
-def test_health_reports_database_unavailable(client, monkeypatch):
+def test_health_reports_database_unavailable(client, app, monkeypatch):
     from sqlalchemy.exc import SQLAlchemyError
 
     def database_unavailable(*_args, **_kwargs):
         raise SQLAlchemyError("simulated database outage")
 
-    monkeypatch.setattr(db.session, "execute", database_unavailable)
+    with app.app_context():
+        monkeypatch.setattr(db.engine, "connect", database_unavailable)
     response = client.get("/health")
     assert response.status_code == 503
     assert response.json["status"] == "unavailable"
