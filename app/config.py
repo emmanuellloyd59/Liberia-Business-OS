@@ -12,9 +12,11 @@ class BaseConfig:
     REMEMBER_COOKIE_HTTPONLY=True
 class DevelopmentConfig(BaseConfig):
     DEBUG=False
+    SECRET_KEY=os.getenv("SECRET_KEY","local-development-only-change-me")
 class TestingConfig(BaseConfig):
     TESTING=True
     WTF_CSRF_ENABLED=False
+    SECRET_KEY="test-only-secret"
     SQLALCHEMY_DATABASE_URI="sqlite://"
 class ProductionConfig(BaseConfig):
     DEBUG=False
