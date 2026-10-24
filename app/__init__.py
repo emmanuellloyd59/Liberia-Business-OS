@@ -25,7 +25,8 @@ def create_app(config_name=None, test_config=None):
         if not database_uri.startswith(("postgresql://", "postgresql+psycopg://")):
             raise RuntimeError("Production requires a PostgreSQL DATABASE_URL.")
 
-    app.config.setdefault("MAX_CONTENT_LENGTH", 2 * 1024 * 1024)
+    if not app.config.get("MAX_CONTENT_LENGTH"):
+        app.config["MAX_CONTENT_LENGTH"] = 2 * 1024 * 1024
     app.config["SESSION_PROTECTION"] = "strong"
     os.makedirs(app.instance_path, exist_ok=True)
     db.init_app(app)
