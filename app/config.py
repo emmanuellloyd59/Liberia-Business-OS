@@ -7,6 +7,7 @@ class BaseConfig:
     elif SQLALCHEMY_DATABASE_URI.startswith("postgresql://") and "+psycopg" not in SQLALCHEMY_DATABASE_URI:
         SQLALCHEMY_DATABASE_URI=SQLALCHEMY_DATABASE_URI.replace("postgresql://","postgresql+psycopg://",1)
     SQLALCHEMY_TRACK_MODIFICATIONS=False
+    RATELIMIT_STORAGE_URI=os.getenv("RATELIMIT_STORAGE_URI", "memory://")
     SESSION_COOKIE_HTTPONLY=True
     SESSION_COOKIE_SAMESITE="Lax"
     REMEMBER_COOKIE_HTTPONLY=True
