@@ -134,3 +134,24 @@ def test_user_supplied_html_is_escaped(client):
     response = client.get("/dashboard")
     assert b"<script>alert(1)</script>" not in response.data
     assert b"<img src=x onerror=alert(1)>" not in response.data
+
+
+def test_security_headers_are_present(client):
+    response = client.get("/")
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
+    assert response.headers["X-Frame-Options"] == "DENY"
+    assert response.headers["Referrer-Policy"] == "strict-origin-when-cross-origin"
+
+
+def test_production_rejects_sqlite_database():
+    import pytest
+    from app import create_app
+
+    with pytest.raises(RuntimeError, match="Production requires a PostgreSQL"):
+        create_app(
+            "production",
+            {
+                "SECRET_KEY": "configured-test-secret",
+                "SQLALCHEMY_DATABASE_URI": "sqlite://",
+            },
+        )
