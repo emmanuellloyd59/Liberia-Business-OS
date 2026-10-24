@@ -1,5 +1,6 @@
 from flask import Blueprint,abort,flash,redirect,render_template_string,request,url_for
 from flask_login import current_user,login_required,login_user,logout_user
+from sqlalchemy.exc import IntegrityError
 from flask_wtf import FlaskForm
 from markupsafe import escape
 from wtforms import StringField,PasswordField,SelectField,TextAreaField,SubmitField
@@ -38,12 +39,23 @@ def register():
     form=RegisterForm()
     if form.validate_on_submit():
         email=form.email.data.strip().lower()
-        if User.query.filter_by(email=email).first(): flash("An account with that email already exists.","warning")
+        if User.query.filter_by(email=email).first():
+            flash("An account with that email already exists.", "warning")
         else:
-            user=User(email=email,full_name=form.full_name.data.strip()); user.set_password(form.password.data)
-            db.session.add(user); db.session.commit(); login_user(user)
-            flash("Account created. Submit your business application when ready.","success")
-            return redirect(url_for("main.dashboard"))
+            user = User(email=email, full_name=form.full_name.data.strip())
+            user.set_password(form.password.data)
+            db.session.add(user)
+            try:
+                db.session.commit()
+            except IntegrityError:
+                # A concurrent registration may insert the same unique email
+                # after the lookup above. Roll back and show a safe response.
+                db.session.rollback()
+                flash("An account with that email already exists.", "warning")
+            else:
+                login_user(user)
+                flash("Account created. Submit your business application when ready.", "success")
+                return redirect(url_for("main.dashboard"))
     body=f'<section class="panel"><h1>Create your account</h1><form method="post">{form.hidden_tag()}{field(form,"full_name",class_="input")}{field(form,"email",class_="input",autocomplete="email")}{field(form,"password",class_="input",autocomplete="new-password")}{form.submit(class_="button")}</form><p>Already registered? <a href="/auth/login">Sign in</a></p></section>'
     return page("Create account",body)
 @bp.route("/auth/login",methods=["GET","POST"])
