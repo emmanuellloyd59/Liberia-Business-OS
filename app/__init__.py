@@ -1,6 +1,8 @@
 import os
 from flask import Flask, jsonify, render_template_string
 from flask_wtf.csrf import CSRFProtect
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 from .config import config_by_name
 from .extensions import db, limiter, login_manager, migrate
 
@@ -62,6 +64,15 @@ def create_app(config_name=None, test_config=None):
 
     @app.get("/health")
     def health():
+        # Render and other orchestrators need to know when the database is
+        # unavailable; a process-only check can otherwise route traffic to a
+        # service that cannot serve application requests.
+        try:
+            db.session.execute(text("SELECT 1"))
+        except SQLAlchemyError:
+            db.session.rollback()
+            app.logger.warning("Health check failed: database is unavailable.")
+            return jsonify(status="unavailable", service="Liberia Business OS"), 503
         return jsonify(status="ok", service="Liberia Business OS"), 200
 
     @app.errorhandler(403)
