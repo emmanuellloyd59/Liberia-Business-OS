@@ -171,6 +171,29 @@ def test_security_headers_are_present(client):
     assert "frame-ancestors 'none'" in csp
 
 
+def test_create_admin_rejects_invalid_email(app, monkeypatch):
+    monkeypatch.setattr("builtins.input", lambda _prompt: "not-an-email")
+    result = app.test_cli_runner().invoke(args=["create-admin"])
+    assert result.exit_code == 0
+    assert "valid administrator email address" in result.output
+    with app.app_context():
+        assert User.query.filter_by(role="admin").count() == 0
+
+
+def test_create_admin_normalizes_email_and_hashes_password(app, monkeypatch):
+    import getpass
+
+    monkeypatch.setattr("builtins.input", lambda _prompt: "Admin@Example.com")
+    monkeypatch.setattr(getpass, "getpass", lambda _prompt: "Very-Strong-Admin-Password-123")
+    result = app.test_cli_runner().invoke(args=["create-admin"])
+    assert result.exit_code == 0
+    assert "Administrator created." in result.output
+    with app.app_context():
+        admin = User.query.filter_by(email="admin@example.com").one()
+        assert admin.role == "admin"
+        assert admin.check_password("Very-Strong-Admin-Password-123")
+
+
 def test_production_rejects_sqlite_database():
     import pytest
     from app import create_app
