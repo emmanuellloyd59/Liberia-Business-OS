@@ -2,7 +2,7 @@ import os
 from flask import Flask, jsonify, render_template_string
 from flask_wtf.csrf import CSRFProtect
 from .config import config_by_name
-from .extensions import db, login_manager, migrate
+from .extensions import db, limiter, login_manager, migrate
 
 csrf = CSRFProtect()
 PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{{ title }} | Liberia Business OS</title><style>
@@ -32,6 +32,8 @@ def create_app(config_name=None, test_config=None):
     db.init_app(app)
     migrate.init_app(app, db)
     login_manager.init_app(app)
+    limiter.storage_uri = app.config.get("RATELIMIT_STORAGE_URI", "memory://")
+    limiter.init_app(app)
     csrf.init_app(app)
 
     @app.after_request
