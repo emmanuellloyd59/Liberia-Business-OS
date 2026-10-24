@@ -32,7 +32,6 @@ def create_app(config_name=None, test_config=None):
     db.init_app(app)
     migrate.init_app(app, db)
     login_manager.init_app(app)
-    limiter.storage_uri = app.config.get("RATELIMIT_STORAGE_URI", "memory://")
     limiter.init_app(app)
     csrf.init_app(app)
 
