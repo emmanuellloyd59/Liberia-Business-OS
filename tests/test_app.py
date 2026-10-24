@@ -220,3 +220,26 @@ def test_production_rejects_in_memory_rate_limit_storage():
             },
         )
 
+
+
+def test_database_rejects_unsupported_user_role(app):
+    import pytest
+    from sqlalchemy.exc import IntegrityError
+    with app.app_context():
+        db.session.add(User(email='invalid-role@example.com', full_name='Invalid Role', password_hash='test-hash', role='superuser'))
+        with pytest.raises(IntegrityError):
+            db.session.commit()
+        db.session.rollback()
+
+def test_database_rejects_unsupported_application_status(app):
+    import pytest
+    from sqlalchemy.exc import IntegrityError
+    with app.app_context():
+        user = User(email='status-owner@example.com', full_name='Status Owner')
+        user.set_password('Strong-test-password-123')
+        db.session.add(user)
+        db.session.flush()
+        db.session.add(BusinessApplication(owner_id=user.id, business_name='Invalid Status Shop', business_type='Retail', county='Montserrado', status='published'))
+        with pytest.raises(IntegrityError):
+            db.session.commit()
+        db.session.rollback()

@@ -4,6 +4,7 @@ from werkzeug.security import check_password_hash,generate_password_hash
 from .extensions import db,login_manager
 def utcnow(): return datetime.now(timezone.utc)
 class User(UserMixin,db.Model):
+    __table_args__ = (db.CheckConstraint("role IN ('admin', 'business_owner')", name="ck_user_role_allowed"),)
     id=db.Column(db.Integer,primary_key=True)
     email=db.Column(db.String(254),unique=True,nullable=False,index=True)
     full_name=db.Column(db.String(120),nullable=False)
@@ -17,6 +18,7 @@ class User(UserMixin,db.Model):
     @property
     def is_admin(self): return self.role=="admin"
 class BusinessApplication(db.Model):
+    __table_args__ = (db.CheckConstraint("status IN ('pending', 'approved', 'rejected')", name="ck_business_application_status_allowed"),)
     id=db.Column(db.Integer,primary_key=True)
     owner_id=db.Column(db.Integer,db.ForeignKey("user.id"),nullable=False,index=True)
     business_name=db.Column(db.String(180),nullable=False)
