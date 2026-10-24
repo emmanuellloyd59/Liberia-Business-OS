@@ -1,9 +1,11 @@
+import os
 import pytest
 from app import create_app
 from app.extensions import db
 @pytest.fixture()
 def app():
-    app=create_app("testing",{"SECRET_KEY":"test-only-secret","SQLALCHEMY_DATABASE_URI":"sqlite://","WTF_CSRF_ENABLED":False})
+    database_url=os.getenv("TEST_DATABASE_URL", "sqlite://")
+    app=create_app("testing",{"SECRET_KEY":"test-only-secret","SQLALCHEMY_DATABASE_URI":database_url,"WTF_CSRF_ENABLED":False})
     with app.app_context():
         db.create_all()
         yield app
