@@ -12,10 +12,11 @@ A Flask platform foundation for business registration applications, administrato
 - Public directory that displays approved applications only.
 - Responsive starter UI, automated tests, GitHub Actions, and Render Blueprint.
 - CI migration verification against PostgreSQL 16 plus isolated SQLite regression tests.
-- Production fail-fast checks for the secret key and PostgreSQL, hardened session handling, response security headers, and a request-body size limit.
+- Production fail-fast checks for the secret key and PostgreSQL, hardened session handling, response security headers, a request-body size limit, and rate limits on authentication endpoints.
+- One-way application review decisions: approved/rejected records cannot be silently overwritten.
 - Interactive CLI command to create the first administrator.
 
-This is an early development milestone, not a claim of production certification. Email verification, password recovery, document storage, notifications, payment processing, formal registration integrations, and full audit trails remain future work.
+This is an early development milestone, not a claim of production certification. Email verification, password recovery, document storage, notifications, payment processing, formal registration integrations, and full audit trails remain future work. Configure `RATELIMIT_STORAGE_URI` to a shared Redis-compatible service in production; the default in-memory backend is intended for local development and is not shared between worker processes.
 
 ## Local setup
 
@@ -42,7 +43,7 @@ The render.yaml file describes a Render web service and managed PostgreSQL datab
 
 ## Next milestones
 
-1. Add audit events and strict application state-transition rules.
+1. Add persistent audit events for account and administrator actions.
 2. Add secure document upload/storage with file validation and access controls.
 3. Add email verification, account recovery, and rate limiting.
 4. Add categories, locations, search filters, and business profile management.
