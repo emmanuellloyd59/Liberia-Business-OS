@@ -108,6 +108,16 @@ def test_admin_can_approve_application_and_only_approved_is_public(client, app):
     )
     assert response.status_code == 200
     assert b"Approval Test Shop" in client.get("/directory").data
+    # A second submission must not overwrite an already recorded decision.
+    client.post(
+        f"/admin/applications/{application_id}/review",
+        data={"status": "rejected", "review_notes": "Attempted overwrite"},
+        follow_redirects=True,
+    )
+    with app.app_context():
+        item = db.session.get(BusinessApplication, application_id)
+        assert item.status == "approved"
+        assert item.review_notes == "Verified"
 
 
 def test_inactive_user_cannot_log_in(client, app):
