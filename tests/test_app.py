@@ -1,11 +1,14 @@
 from app.models import User,BusinessApplication
 from app.extensions import db
-def register(client,email="owner@example.com"):
-    return client.post("/auth/register",data={"full_name":"Test Owner","email":email,"password":"Strong-test-password-123"},follow_redirects=True)
+
+def register(client,email="owner@example.com",full_name="Test Owner"):
+    return client.post("/auth/register",data={"full_name":full_name,"email":email,"password":"Strong-test-password-123"},follow_redirects=True)
+
 def test_home_health(client):
     assert client.get("/").status_code==200
     response=client.get("/health")
     assert response.status_code==200 and response.json["status"]=="ok"
+
 def test_registration_and_owner_application(client,app):
     response=register(client)
     assert response.status_code==200 and b"Your applications" in response.data
@@ -15,17 +18,74 @@ def test_registration_and_owner_application(client,app):
         user=User.query.filter_by(email="owner@example.com").one()
         item=BusinessApplication.query.filter_by(owner_id=user.id).one()
         assert item.status=="pending" and item.business_name=="Monrovia Test Traders"
+
 def test_password_hashing(app):
     with app.app_context():
         user=User(email="hash@example.com",full_name="Hash Test"); user.set_password("another-strong-password")
         assert user.password_hash!="another-strong-password"
         assert user.check_password("another-strong-password")
         assert not user.check_password("wrong-password")
+
 def test_non_admin_denied_admin_queue(client):
     register(client)
     assert client.get("/admin/applications").status_code==403
-def test_directory_only_shows_approved(client,app):
+
+def test_directory_only_shows_approved(client):
     register(client)
     client.post("/applications/new",data={"business_name":"Pending Traders","business_type":"Retail","county":"Montserrado","description":"Not public yet"})
     response=client.get("/directory")
     assert b"Pending Traders" not in response.data
+
+def test_duplicate_email_does_not_create_second_account(client,app):
+    register(client)
+    client.post("/auth/logout",follow_redirects=True)
+    response=register(client)
+    assert b"already exists" in response.data
+    with app.app_context():
+        assert User.query.filter_by(email="owner@example.com").count()==1
+
+def test_owner_cannot_see_another_owners_application(app):
+    owner_one=app.test_client(); owner_two=app.test_client()
+    register(owner_one,"one@example.com","Owner One")
+    owner_one.post("/applications/new",data={"business_name":"Private Owner One Shop","business_type":"Retail","county":"Montserrado","description":"private details"})
+    register(owner_two,"two@example.com","Owner Two")
+    response=owner_two.get("/dashboard")
+    assert response.status_code==200
+    assert b"Private Owner One Shop" not in response.data
+    assert b"private details" not in response.data
+
+def test_admin_can_approve_application_and_only_approved_is_public(client,app):
+    register(client)
+    client.post("/applications/new",data={"business_name":"Approval Test Shop","business_type":"Retail","county":"Montserrado","description":"Public after approval"})
+    client.post("/auth/logout",follow_redirects=True)
+    with app.app_context():
+        admin=User(email="admin@example.com",full_name="Test Admin",role="admin")
+        admin.set_password("Admin-test-password-123")
+        db.session.add(admin); db.session.commit()
+    login=client.post("/auth/login",data={"email":"admin@example.com","password":"Admin-test-password-123"},follow_redirects=True)
+    assert login.status_code==200
+    listing=client.get("/admin/applications")
+    assert listing.status_code==200 and b"Approval Test Shop" in listing.data
+    with app.app_context():
+        item=BusinessApplication.query.filter_by(business_name="Approval Test Shop").one()
+        application_id=item.id
+    response=client.post(f"/admin/applications/{application_id}/review",data={"status":"approved","review_notes":"Verified"},follow_redirects=True)
+    assert response.status_code==200
+    directory=client.get("/directory")
+    assert b"Approval Test Shop" in directory.data
+
+def test_inactive_user_cannot_log_in(client,app):
+    with app.app_context():
+        user=User(email="inactive@example.com",full_name="Inactive User",is_active=False)
+        user.set_password("Strong-test-password-123")
+        db.session.add(user); db.session.commit()
+    response=client.post("/auth/login",data={"email":"inactive@example.com","password":"Strong-test-password-123"},follow_redirects=True)
+    assert b"Email or password is incorrect" in response.data
+    assert client.get("/dashboard").status_code==302
+
+def test_user_supplied_html_is_escaped(client):
+    register(client)
+    client.post("/applications/new",data={"business_name":"<script>alert(1)</script>","business_type":"Retail","county":"Montserrado","description":"<img src=x onerror=alert(1)>"})
+    response=client.get("/dashboard")
+    assert b"<script>alert(1)</script>" not in response.data
+    assert b"<img src=x onerror=alert(1)>" not in response.data
