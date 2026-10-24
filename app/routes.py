@@ -4,7 +4,7 @@ from flask_wtf import FlaskForm
 from markupsafe import escape
 from wtforms import StringField,PasswordField,SelectField,TextAreaField,SubmitField
 from wtforms.validators import DataRequired,Email,Length
-from .extensions import db
+from .extensions import db, limiter
 from .models import User,BusinessApplication
 from . import PAGE
 bp=Blueprint("main",__name__)
@@ -32,6 +32,7 @@ def field(form,name,**attrs):
     f=getattr(form,name)
     return f'<label>{f.label.text}</label>{f(**attrs)}'+''.join(f'<p style="color:#b42318">{escape(e)}</p>' for e in f.errors)
 @bp.route("/auth/register",methods=["GET","POST"])
+@limiter.limit("5 per minute")
 def register():
     if current_user.is_authenticated: return redirect(url_for("main.dashboard"))
     form=RegisterForm()
@@ -46,6 +47,7 @@ def register():
     body=f'<section class="panel"><h1>Create your account</h1><form method="post">{form.hidden_tag()}{field(form,"full_name",class_="input")}{field(form,"email",class_="input",autocomplete="email")}{field(form,"password",class_="input",autocomplete="new-password")}{form.submit(class_="button")}</form><p>Already registered? <a href="/auth/login">Sign in</a></p></section>'
     return page("Create account",body)
 @bp.route("/auth/login",methods=["GET","POST"])
+@limiter.limit("10 per minute")
 def login():
     if current_user.is_authenticated: return redirect(url_for("main.dashboard"))
     form=LoginForm()
@@ -103,6 +105,13 @@ def review(application_id):
     if not current_user.is_admin: abort(403)
     item=db.get_or_404(BusinessApplication,application_id); form=ReviewForm(status=item.status if item.status in {"approved","rejected"} else "approved",review_notes=item.review_notes)
     if form.validate_on_submit():
-        item.status=form.status.data; item.review_notes=(form.review_notes.data or "").strip(); db.session.commit(); flash("Application review saved.","success"); return redirect(url_for("main.admin_applications"))
+        if item.status != "pending":
+            flash("This application has already been reviewed. A new review decision cannot overwrite the original decision.", "warning")
+            return redirect(url_for("main.admin_applications"))
+        item.status=form.status.data
+        item.review_notes=(form.review_notes.data or "").strip()
+        db.session.commit()
+        flash("Application review saved.","success")
+        return redirect(url_for("main.admin_applications"))
     body=f'<section class="panel"><h1>Review {escape(item.business_name)}</h1><p>{escape(item.business_type)} · {escape(item.county)} County</p><p>{escape(item.description)}</p><form method="post">{form.hidden_tag()}{field(form,"status",class_="input")}{field(form,"review_notes",class_="input")}{form.submit(class_="button")}</form></section>'
     return page("Review application",body)
