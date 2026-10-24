@@ -5,7 +5,7 @@ A Flask platform foundation for business registration applications, administrato
 ## Included in this first milestone
 
 - Flask application factory and WSGI entry point.
-- PostgreSQL-ready SQLAlchemy configuration and Flask-Migrate integration.
+- PostgreSQL-ready SQLAlchemy configuration and committed Flask-Migrate migration.
 - Account registration and login with password hashing and CSRF protection.
 - Owner-scoped business applications with pending, approved, and rejected states.
 - Administrator-only application review.
@@ -19,12 +19,7 @@ This is an early development milestone, not a claim of production certification.
 
 Use Python 3.12 or newer. Create a virtual environment and install dependencies with pip install -r requirements.txt. Copy .env.example to .env, set a unique random SECRET_KEY and your PostgreSQL DATABASE_URL, then export those values in your shell. The app does not automatically load .env.
 
-Initialize the schema once with:
-- flask --app wsgi:app db init
-- flask --app wsgi:app db migrate -m "Initial schema"
-- flask --app wsgi:app db upgrade
-
-Create an administrator using flask --app wsgi:app create-admin, then run flask --app wsgi:app run. For local smoke testing, development defaults to SQLite if DATABASE_URL is unset; production should use PostgreSQL.
+Apply the committed schema migration with flask --app wsgi:app db upgrade. Create an administrator using flask --app wsgi:app create-admin, then run flask --app wsgi:app run. For local smoke testing, development defaults to SQLite if DATABASE_URL is unset; production should use PostgreSQL.
 
 ## Tests
 
@@ -32,7 +27,7 @@ Install dependencies, then run pytest -q. Tests use an isolated in-memory SQLite
 
 ## Deployment
 
-The render.yaml file describes a Render web service and managed PostgreSQL database. Review the plan and service settings before deploying. Keep secrets out of Git. Database migrations should be a controlled release step after reviewing a backup and migration plan.
+The render.yaml file describes a Render web service and managed PostgreSQL database. Review the plan and service settings before deploying. Keep secrets out of Git. Run flask --app wsgi:app db upgrade as a controlled release step against the intended database before serving requests, after reviewing a backup and migration plan. Do not automatically reset or downgrade a production database.
 
 ## Security notes
 
