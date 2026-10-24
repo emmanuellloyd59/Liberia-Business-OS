@@ -17,7 +17,6 @@ def upgrade():
         sa.Column("role", sa.String(length=30), nullable=False),
         sa.Column("is_active", sa.Boolean(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.UniqueConstraint("email", name="uq_user_email"),
     )
     op.create_index("ix_user_email", "user", ["email"], unique=True)
     op.create_table(
