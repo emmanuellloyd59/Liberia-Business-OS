@@ -7,7 +7,7 @@ from markupsafe import escape
 from wtforms import StringField,PasswordField,SelectChoice,SelectField,TextAreaField,SubmitField
 from wtforms.validators import DataRequired,Email,Length
 from .extensions import db, limiter
-from .models import User,BusinessApplication
+from .models import User,BusinessApplication,AuditEvent
 from . import PAGE
 bp=Blueprint("main",__name__)
 class RegisterForm(FlaskForm):
@@ -121,6 +121,8 @@ def review(application_id):
         # Make the pending -> final transition atomic. Two administrators can
         # load the same pending record; a conditional UPDATE ensures only one
         # decision can win, even when requests run concurrently.
+        previous_status = item.status
+        decision_notes = (form.review_notes.data or "").strip()
         result = db.session.execute(
             update(BusinessApplication)
             .where(
@@ -129,13 +131,22 @@ def review(application_id):
             )
             .values(
                 status=form.status.data,
-                review_notes=(form.review_notes.data or "").strip(),
+                review_notes=decision_notes,
             )
         )
         if result.rowcount != 1:
             db.session.rollback()
             flash("This application has already been reviewed. A new review decision cannot overwrite the original decision.", "warning")
             return redirect(url_for("main.admin_applications"))
+        db.session.add(AuditEvent(
+            actor_user_id=current_user.id,
+            application_id=application_id,
+            event_type="application_reviewed",
+            previous_status=previous_status,
+            new_status=form.status.data,
+            notes=decision_notes,
+        ))
+        # Commit the decision and audit record atomically.
         db.session.commit()
         flash("Application review saved.","success")
         return redirect(url_for("main.admin_applications"))

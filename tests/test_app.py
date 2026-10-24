@@ -1,4 +1,4 @@
-from app.models import User, BusinessApplication
+from app.models import User, BusinessApplication, AuditEvent
 from app.extensions import db
 
 
@@ -243,3 +243,25 @@ def test_database_rejects_unsupported_application_status(app):
         with pytest.raises(IntegrityError):
             db.session.commit()
         db.session.rollback()
+
+
+def test_admin_review_writes_atomic_audit_event(client, app):
+    register(client, "audit-owner@example.com", "Audit Owner")
+    client.post("/applications/new", data={"business_name": "Audit Trail Shop", "business_type": "Retail", "county": "Montserrado", "description": "Audit test"})
+    client.post("/auth/logout", follow_redirects=True)
+    with app.app_context():
+        admin = User(email="audit-admin@example.com", full_name="Audit Admin", role="admin")
+        admin.set_password("Admin-audit-password-123")
+        db.session.add(admin)
+        db.session.commit()
+        application_id = BusinessApplication.query.filter_by(business_name="Audit Trail Shop").one().id
+    client.post("/auth/login", data={"email": "audit-admin@example.com", "password": "Admin-audit-password-123"}, follow_redirects=True)
+    response = client.post("/admin/applications/" + str(application_id) + "/review", data={"status": "approved", "review_notes": "Ownership verified"}, follow_redirects=True)
+    assert response.status_code == 200
+    with app.app_context():
+        event = AuditEvent.query.filter_by(application_id=application_id).one()
+        assert event.actor_user_id == User.query.filter_by(email="audit-admin@example.com").one().id
+        assert event.event_type == "application_reviewed"
+        assert event.previous_status == "pending"
+        assert event.new_status == "approved"
+        assert event.notes == "Ownership verified"

@@ -34,3 +34,15 @@ class BusinessApplication(db.Model):
 def load_user(user_id):
     try: return db.session.get(User,int(user_id))
     except (TypeError,ValueError): return None
+
+
+class AuditEvent(db.Model):
+    """Append-only record of privileged business-application decisions."""
+    id = db.Column(db.Integer, primary_key=True)
+    actor_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    application_id = db.Column(db.Integer, db.ForeignKey("business_application.id"), nullable=False, index=True)
+    event_type = db.Column(db.String(50), nullable=False)
+    previous_status = db.Column(db.String(30), nullable=False)
+    new_status = db.Column(db.String(30), nullable=False)
+    notes = db.Column(db.Text, nullable=False, default="")
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
