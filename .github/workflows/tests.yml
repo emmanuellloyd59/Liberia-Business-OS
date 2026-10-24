@@ -6,6 +6,20 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: liberia_business_os
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d liberia_business_os"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -15,12 +29,13 @@ jobs:
       - run: pip install -r requirements.txt
       - name: Compile application and tests
         run: python -m compileall -q app tests wsgi.py
-      - name: Verify database migration
+      - name: Verify migration on PostgreSQL 16
         run: python -m flask --app wsgi:app db upgrade
         env:
           SECRET_KEY: ci-only-test-secret
-          FLASK_CONFIG: testing
-      - name: Run automated tests
+          FLASK_CONFIG: production
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/liberia_business_os
+      - name: Run automated regression tests (isolated SQLite)
         run: python -m pytest -q
         env:
           SECRET_KEY: ci-only-test-secret
