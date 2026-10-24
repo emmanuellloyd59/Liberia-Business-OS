@@ -11,6 +11,8 @@ A Flask platform foundation for business registration applications, administrato
 - Administrator-only application review.
 - Public directory that displays approved applications only.
 - Responsive starter UI, automated tests, GitHub Actions, and Render Blueprint.
+- CI migration verification against PostgreSQL 16 plus isolated SQLite regression tests.
+- Production fail-fast checks for the secret key and PostgreSQL, hardened session handling, response security headers, and a request-body size limit.
 - Interactive CLI command to create the first administrator.
 
 This is an early development milestone, not a claim of production certification. Email verification, password recovery, document storage, notifications, payment processing, formal registration integrations, and full audit trails remain future work.
@@ -23,7 +25,7 @@ Apply the committed schema migration with flask --app wsgi:app db upgrade. Creat
 
 ## Tests
 
-Install dependencies, then run pytest -q. Tests use an isolated in-memory SQLite database and do not connect to production data.
+Install dependencies, then run pytest -q. Application regression tests use an isolated in-memory SQLite database and do not connect to production data. GitHub Actions additionally starts PostgreSQL 16 and verifies the committed Alembic migration against that database on pushes and pull requests.
 
 ## Deployment
 
@@ -45,4 +47,4 @@ The render.yaml file describes a Render web service and managed PostgreSQL datab
 3. Add email verification, account recovery, and rate limiting.
 4. Add categories, locations, search filters, and business profile management.
 5. Add notification workflows, reports, and operational dashboards.
-6. Add PostgreSQL integration tests and deployment smoke checks.
+6. Add end-to-end PostgreSQL application tests and deployment smoke checks.
