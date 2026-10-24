@@ -88,7 +88,15 @@ def create_app(config_name=None, test_config=None):
     def create_admin():
         import getpass
         from .models import User
-        email = input("Administrator email: ").strip().lower()
+        from email_validator import EmailNotValidError, validate_email
+        try:
+            email = validate_email(
+                input("Administrator email: ").strip(),
+                check_deliverability=False,
+            ).normalized.lower()
+        except EmailNotValidError:
+            print("Enter a valid administrator email address.")
+            return
         if User.query.filter_by(email=email).first():
             print("That email already exists.")
             return
