@@ -24,6 +24,12 @@ def create_app(config_name=None, test_config=None):
         database_uri = app.config.get("SQLALCHEMY_DATABASE_URI", "")
         if not database_uri.startswith(("postgresql://", "postgresql+psycopg://")):
             raise RuntimeError("Production requires a PostgreSQL DATABASE_URL.")
+        rate_limit_storage = str(app.config.get("RATELIMIT_STORAGE_URI", "")).strip()
+        if not rate_limit_storage.startswith(("redis://", "rediss://", "redis+")):
+            raise RuntimeError(
+                "Production requires shared Redis-compatible RATELIMIT_STORAGE_URI; "
+                "in-memory rate limits are not safe across multiple workers."
+            )
 
     if not app.config.get("MAX_CONTENT_LENGTH"):
         app.config["MAX_CONTENT_LENGTH"] = 2 * 1024 * 1024
