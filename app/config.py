@@ -17,6 +17,7 @@ class DevelopmentConfig(BaseConfig):
 class TestingConfig(BaseConfig):
     TESTING=True
     WTF_CSRF_ENABLED=False
+    RATELIMIT_ENABLED=False
     SECRET_KEY="test-only-secret"
     SQLALCHEMY_DATABASE_URI="sqlite://"
 class ProductionConfig(BaseConfig):
