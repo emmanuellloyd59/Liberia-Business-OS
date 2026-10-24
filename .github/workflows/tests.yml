@@ -7,6 +7,15 @@ jobs:
   test:
     runs-on: ubuntu-latest
     services:
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
       postgres:
         image: postgres:16
         env:
@@ -35,6 +44,7 @@ jobs:
           SECRET_KEY: ci-only-test-secret
           FLASK_CONFIG: production
           DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/liberia_business_os
+          RATELIMIT_STORAGE_URI: redis://localhost:6379/0
       - name: Run automated regression tests (isolated SQLite)
         run: python -m pytest -q
         env:
