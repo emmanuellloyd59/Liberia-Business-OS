@@ -13,6 +13,8 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: pip install -r requirements.txt
+      - name: Compile application and tests
+        run: python -m compileall -q app tests wsgi.py
       - name: Verify database migration
         run: python -m flask --app wsgi:app db upgrade
         env:
