@@ -1,6 +1,6 @@
 from flask import Blueprint,abort,flash,redirect,render_template_string,request,url_for
 from flask_login import current_user,login_required,login_user,logout_user
-from sqlalchemy import update
+from sqlalchemy import or_, update
 from sqlalchemy.exc import IntegrityError
 from flask_wtf import FlaskForm
 from markupsafe import escape
@@ -109,9 +109,10 @@ def directory():
     ]
     query = BusinessApplication.query.filter_by(status="approved")
     if search_term:
-        pattern = f"%{search_term.replace('%', r'\\%').replace('_', r'\\_')}%"
+        escaped_search = search_term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        pattern = f"%{escaped_search}%"
         query = query.filter(
-            db.or_(
+            or_(
                 BusinessApplication.business_name.ilike(pattern, escape="\\"),
                 BusinessApplication.business_type.ilike(pattern, escape="\\"),
                 BusinessApplication.description.ilike(pattern, escape="\\"),
@@ -122,8 +123,9 @@ def directory():
     else:
         county = ""
     if business_type:
+        escaped_type = business_type.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         query = query.filter(
-            BusinessApplication.business_type.ilike(f"%{business_type.replace('%', r'\\%').replace('_', r'\\_')}%", escape="\\")
+            BusinessApplication.business_type.ilike(f"%{escaped_type}%", escape="\\")
         )
     pagination = query.order_by(BusinessApplication.business_name.asc()).paginate(
         page=max(page_number, 1), per_page=25, error_out=False
