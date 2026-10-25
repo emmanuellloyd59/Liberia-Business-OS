@@ -56,3 +56,30 @@ jobs:
           SECRET_KEY: ci-only-test-secret
           FLASK_CONFIG: testing
           TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/liberia_business_os
+      - name: Production smoke test for live registration page
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          PRODUCTION_URL: https://liberia-business-os.onrender.com
+        run: |
+          set -eu
+          ready=0
+          for attempt in $(seq 1 24); do
+            if curl --fail --silent --show-error "$PRODUCTION_URL/health" -o /tmp/health.json; then
+              ready=1
+              break
+            fi
+            echo "Production service not ready yet (attempt $attempt/24); retrying in 10 seconds."
+            sleep 10
+          done
+          test "$ready" -eq 1
+          python -c 'import json; d=json.load(open("/tmp/health.json")); assert d.get("status") == "ok", d'
+          curl --fail --silent --show-error "$PRODUCTION_URL/auth/register" -o /tmp/register.html
+          python - <<'PY'
+          from pathlib import Path
+          page = Path('/tmp/register.html').read_text()
+          required = ('Create your account', 'name="csrf_token"', 'name="full_name"', 'name="email"', 'name="password"')
+          missing = [item for item in required if item not in page]
+          if missing:
+              raise SystemExit(f'Live registration form missing expected fields: {missing}')
+          print('Production smoke test passed: health check and registration form render correctly.')
+          PY
