@@ -16,7 +16,7 @@ A Flask platform foundation for business registration applications, administrato
 - One-way application review decisions: approved/rejected records cannot be silently overwritten.
 - Interactive CLI command to create the first administrator.
 
-This is an early development milestone, not a claim of production certification. Email verification, password recovery, document storage, notifications, payment processing, formal registration integrations, and full audit trails remain future work. Production startup now refuses to run with the default in-memory rate-limit backend. Configure `RATELIMIT_STORAGE_URI` in Render with the private Redis-compatible connection URL from a shared Redis/Key Value service (use `rediss://` when TLS is required). Do not use a public endpoint or commit the URL. The Render Blueprint marks this variable as manually supplied and intentionally does not provision a potentially billable service automatically. Local development may continue using `memory://`.
+This is an early development milestone, not a claim of production certification. Email verification, password recovery, document storage, notifications, payment processing, formal registration integrations, and broader audit coverage for account/profile changes remain future work. Administrator review decisions already write persistent audit events in the same database transaction as the decision. Production startup now refuses to run with the default in-memory rate-limit backend. Configure `RATELIMIT_STORAGE_URI` in Render with the private Redis-compatible connection URL from a shared Redis/Key Value service (use `rediss://` when TLS is required). Do not use a public endpoint or commit the URL. The Render Blueprint marks this variable as manually supplied and intentionally does not provision a potentially billable service automatically. Local development may continue using `memory://`.
 
 ## Local setup
 
@@ -43,7 +43,7 @@ The render.yaml file describes a Render web service and managed PostgreSQL datab
 
 ## Next milestones
 
-1. Add persistent audit events for account and administrator actions.
+1. Extend persistent audit events to account, authentication, and business-profile actions.
 2. Add secure document upload/storage with file validation and access controls.
 3. Add email verification and account recovery (authentication endpoint rate limiting is implemented).
 4. Add categories, locations, search filters, and business profile management.
