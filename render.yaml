@@ -3,7 +3,9 @@ services:
     name: liberia-business-os
     runtime: python
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn wsgi:app
+    # Apply versioned schema migrations before accepting requests. Migrations are
+    # forward-only and must not drop or reset application data.
+    startCommand: flask --app wsgi:app db upgrade && gunicorn wsgi:app
     healthCheckPath: /health
     envVars:
       - key: FLASK_CONFIG
