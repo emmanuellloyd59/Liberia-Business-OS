@@ -96,12 +96,72 @@ def new_application():
     return page("New application",body)
 @bp.get("/directory")
 def directory():
-    items=BusinessApplication.query.filter_by(status="approved").order_by(BusinessApplication.business_name.asc()).all()
-    body='<section class="panel"><h1>Liberian business directory</h1><p>Only applications approved by administrators appear here.</p>'
-    if not items: body+='<p>No approved businesses have been published yet.</p>'
-    for x in items:
-        body+=f'<article><h2>{escape(x.business_name)}</h2><p>{escape(x.business_type)} · {escape(x.county)} County</p><p>{escape(x.description)}</p><span class="status approved">Approved</span></article><hr>'
-    return page("Business directory",body+'</section>')
+    # Bound query inputs and paginate public results so the directory remains
+    # responsive as the number of approved businesses grows.
+    search_term = request.args.get("q", "").strip()[:100]
+    county = request.args.get("county", "").strip()
+    business_type = request.args.get("type", "").strip()[:100]
+    page_number = request.args.get("page", 1, type=int) or 1
+    valid_counties = [
+        "Bomi", "Bong", "Gbarpolu", "Grand Bassa", "Grand Cape Mount",
+        "Grand Gedeh", "Grand Kru", "Lofa", "Margibi", "Maryland",
+        "Montserrado", "Nimba", "River Cess", "River Gee", "Sinoe",
+    ]
+    query = BusinessApplication.query.filter_by(status="approved")
+    if search_term:
+        pattern = f"%{search_term.replace('%', r'\\%').replace('_', r'\\_')}%"
+        query = query.filter(
+            db.or_(
+                BusinessApplication.business_name.ilike(pattern, escape="\\"),
+                BusinessApplication.business_type.ilike(pattern, escape="\\"),
+                BusinessApplication.description.ilike(pattern, escape="\\"),
+            )
+        )
+    if county in valid_counties:
+        query = query.filter_by(county=county)
+    else:
+        county = ""
+    if business_type:
+        query = query.filter(
+            BusinessApplication.business_type.ilike(f"%{business_type.replace('%', r'\\%').replace('_', r'\\_')}%", escape="\\")
+        )
+    pagination = query.order_by(BusinessApplication.business_name.asc()).paginate(
+        page=max(page_number, 1), per_page=25, error_out=False
+    )
+    body = (
+        '<section class="panel"><h1>Liberian business directory</h1>'
+        '<p>Only applications approved by administrators appear here.</p>'
+        '<form method="get" action="/directory">'
+        f'<label for="directory-q">Search businesses</label><input class="input" id="directory-q" name="q" value="{escape(search_term)}" maxlength="100" placeholder="Name, category or description">'
+        '<label for="directory-county">County</label><select class="input" id="directory-county" name="county"><option value="">All counties</option>'
+    )
+    for option in valid_counties:
+        selected = ' selected' if county == option else ''
+        body += f'<option value="{escape(option)}"{selected}>{escape(option)}</option>'
+    body += (
+        '</select><label for="directory-type">Business type</label>'
+        f'<input class="input" id="directory-type" name="type" value="{escape(business_type)}" maxlength="100" placeholder="e.g. Retail">'
+        '<button class="button" type="submit">Search directory</button> '
+        '<a href="/directory">Clear filters</a></form>'
+    )
+    if not pagination.items:
+        body += '<p>No approved businesses match those filters.</p>'
+    for item in pagination.items:
+        body += (
+            f'<article><h2>{escape(item.business_name)}</h2>'
+            f'<p>{escape(item.business_type)} · {escape(item.county)} County</p>'
+            f'<p>{escape(item.description)}</p>'
+            '<span class="status approved">Approved</span></article><hr>'
+        )
+    if pagination.pages > 1:
+        body += '<nav aria-label="Directory pages">'
+        if pagination.has_prev:
+            body += f'<a href="{url_for("main.directory", q=search_term, county=county, type=business_type, page=pagination.prev_num)}">Previous</a> '
+        body += f'<span>Page {pagination.page} of {pagination.pages}</span>'
+        if pagination.has_next:
+            body += f' <a href="{url_for("main.directory", q=search_term, county=county, type=business_type, page=pagination.next_num)}">Next</a>'
+        body += '</nav>'
+    return page("Business directory", body + '</section>')
 @bp.get("/admin/applications")
 @login_required
 def admin_applications():
