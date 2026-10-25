@@ -1,0 +1,1 @@
+This directory contains the initial schema migration. Review migrations before applying them to any database. Run flask --app wsgi:app db upgrade after confirming DATABASE_URL points to the intended database. Never run downgrade or reset commands against production without a verified backup and an approved rollback plan.
