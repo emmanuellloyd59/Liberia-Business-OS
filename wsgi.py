@@ -22,12 +22,12 @@ if is_production or uses_postgresql:
     # Resolve the migration directory absolutely; Render's working directory
     # can differ from the repository root depending on service configuration.
     migration_dir = str(Path(__file__).resolve().parent / "migrations")
-    logger.info(
-        "Database startup: running Alembic migrations (dialect=%s, directory=%s)",
-        app.extensions["sqlalchemy"].engine.dialect.name,
-        migration_dir,
-    )
     with app.app_context():
+        logger.info(
+            "Database startup: running Alembic migrations (dialect=%s, directory=%s)",
+            app.extensions["sqlalchemy"].engine.dialect.name,
+            migration_dir,
+        )
         upgrade(directory=migration_dir)
         inspector = inspect(app.extensions["sqlalchemy"].engine)
         required_tables = {"user", "business_application", "audit_event", "alembic_version"}
