@@ -265,3 +265,73 @@ def test_admin_review_writes_atomic_audit_event(client, app):
         assert event.previous_status == "pending"
         assert event.new_status == "approved"
         assert event.notes == "Ownership verified"
+
+
+def test_directory_search_filters_and_never_exposes_pending_applications(client, app):
+    with app.app_context():
+        owner = User(email="directory-owner@example.com", full_name="Directory Owner")
+        owner.set_password("Strong-test-password-123")
+        db.session.add(owner)
+        db.session.flush()
+        db.session.add_all([
+            BusinessApplication(
+                owner_id=owner.id, business_name="Monrovia Fresh Foods",
+                business_type="Agriculture", county="Montserrado",
+                description="Fresh produce", status="approved",
+            ),
+            BusinessApplication(
+                owner_id=owner.id, business_name="Bong Farm Supplies",
+                business_type="Agriculture", county="Bong",
+                description="Farm tools", status="approved",
+            ),
+            BusinessApplication(
+                owner_id=owner.id, business_name="Hidden Pending Foods",
+                business_type="Agriculture", county="Montserrado",
+                description="Not public", status="pending",
+            ),
+        ])
+        db.session.commit()
+
+    response = client.get("/directory?q=Fresh&county=Montserrado&type=Agriculture")
+    assert response.status_code == 200
+    assert b"Monrovia Fresh Foods" in response.data
+    assert b"Bong Farm Supplies" not in response.data
+    assert b"Hidden Pending Foods" not in response.data
+
+    response = client.get("/directory?county=Not-A-County")
+    assert response.status_code == 200
+    assert b"Monrovia Fresh Foods" in response.data
+    assert b"Bong Farm Supplies" in response.data
+    assert b"Hidden Pending Foods" not in response.data
+
+
+def test_directory_paginates_approved_businesses(client, app):
+    with app.app_context():
+        owner = User(email="pagination-owner@example.com", full_name="Pagination Owner")
+        owner.set_password("Strong-test-password-123")
+        db.session.add(owner)
+        db.session.flush()
+        db.session.add_all([
+            BusinessApplication(
+                owner_id=owner.id,
+                business_name=f"Approved Shop {number:02d}",
+                business_type="Retail",
+                county="Montserrado",
+                description="Approved test listing",
+                status="approved",
+            )
+            for number in range(30)
+        ])
+        db.session.commit()
+
+    first_page = client.get("/directory")
+    assert first_page.status_code == 200
+    assert b"Page 1 of 2" in first_page.data
+    assert b"Approved Shop 00" in first_page.data
+    assert b"Approved Shop 24" in first_page.data
+    assert b"Approved Shop 29" not in first_page.data
+
+    second_page = client.get("/directory?page=2")
+    assert second_page.status_code == 200
+    assert b"Page 2 of 2" in second_page.data
+    assert b"Approved Shop 29" in second_page.data
