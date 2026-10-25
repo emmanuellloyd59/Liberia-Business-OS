@@ -83,3 +83,17 @@ jobs:
               raise SystemExit(f'Live registration form missing expected fields: {missing}')
           print('Production smoke test passed: health check and registration form render correctly.')
           PY
+          # A registration POST without its CSRF token must be rejected before
+          # any account can be created. This intentionally submits no valid
+          # registration data and does not mutate production records.
+          status=$(curl --silent --show-error --output /tmp/register-csrf.html --write-out '%{http_code}' \
+            --request POST \
+            --data-urlencode 'full_name=Smoke Test Invalid' \
+            --data-urlencode 'email=production-smoke-invalid@example.invalid' \
+            --data-urlencode 'password=Not-a-real-production-password-123' \
+            "$PRODUCTION_URL/auth/register")
+          if [ "$status" != "400" ]; then
+            echo "Expected CSRF-protected registration POST to return HTTP 400; got $status"
+            exit 1
+          fi
+          echo "Production CSRF test passed: unauthenticated registration POST without token rejected with HTTP 400."
