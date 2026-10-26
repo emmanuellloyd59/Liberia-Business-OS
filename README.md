@@ -55,3 +55,11 @@ The render.yaml file describes a Render web service and managed PostgreSQL datab
 4. Add categories, locations, search filters, and business profile management.
 5. Add notification workflows, reports, and operational dashboards.
 6. Add end-to-end PostgreSQL application tests and deployment smoke checks.
+
+
+## Version 0.4 reporting
+
+- Administrators can download a CSV report from `/admin/overview`; the export uses the same business/applicant search, status, and county filters.
+- Exports include application status, applicant contact details, descriptions, review notes, and timestamps, and are restricted to authenticated administrators.
+- CSV cells beginning with spreadsheet formula characters are neutralized to reduce formula-injection risk. Export responses are marked no-store.
+- Reports are generated from existing application data; no database schema changes or production data rewrites are required.
