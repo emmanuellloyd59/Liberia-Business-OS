@@ -16,9 +16,9 @@ Build on the existing Flask/PostgreSQL foundation without replacing the applicat
    - Add dedicated public profile URLs only for approved records.
 3. **Administration**
    - Preserve administrator-only access and one-way review decisions.
-   - Record privileged profile and verification changes in an audit trail.
+   - Record application submissions, owner edits, and administrator review decisions in an audit trail, including actor, status transition, timestamp, and review notes where applicable.
 4. **Quality and security**
-   - Add tests for owner isolation, cross-owner ID tampering, approved-record edit restrictions, CSRF, invalid values, and directory visibility.
+   - Add tests for owner isolation, cross-owner ID tampering, approved-record edit restrictions, CSRF, invalid values, directory visibility, and audit events for submission/edit/review workflows.
    - Run the full pytest suite and PostgreSQL migration verification in CI.
    - Smoke-test the deployed health endpoint and key routes after a reviewed release.
 
