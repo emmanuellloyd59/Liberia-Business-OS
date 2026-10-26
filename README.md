@@ -41,6 +41,12 @@ The render.yaml file describes a Render web service and managed PostgreSQL datab
 - Production session cookies require HTTPS.
 - Never commit .env files, database dumps, uploaded identity documents, or real user data.
 
+## Version 0.3 dashboards
+
+- `/dashboard/overview` gives signed-in owners counts and recent audit activity scoped to their own applications.
+- `/admin/overview` provides administrator-only search, county/status filters, summary counts, and pagination.
+- These dashboard additions do not change the database schema or reset production data.
+
 ## Next milestones
 
 1. Extend persistent audit events to account, authentication, and business-profile actions.
