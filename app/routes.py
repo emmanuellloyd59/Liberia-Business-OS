@@ -72,7 +72,7 @@ def login():
             login_user(user)
             return redirect(url_for("main.dashboard"))
         flash("Email or password is incorrect.","danger")
-    body=f'<section class="panel"><h1>Sign in</h1><form method="post">{form.hidden_tag()}{field(form,"email",class_="input",autocomplete="email")}{field(form,"password",class_="input",autocomplete="current-password")}{form.submit(class_="button")}</form><p>New here? <a href="/auth/register">Create an account</a></p></section>'
+    body=f'<section class="panel"><h1>Sign in</h1><form method="post">{form.hidden_tag()}{field(form,"email",class_="input",autocomplete="email")}{field(form,"password",class_="input",autocomplete="current-password")}{form.submit(class_="button")}</form><p><a href="/auth/password-reset">Forgot your password?</a></p><p>New here? <a href="/auth/register">Create an account</a></p></section>'
     return page("Sign in",body)
 @bp.post("/auth/logout")
 @login_required
