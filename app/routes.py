@@ -92,7 +92,19 @@ def new_application():
     form=ApplicationForm()
     if form.validate_on_submit():
         item=BusinessApplication(owner_id=current_user.id,business_name=form.business_name.data.strip(),business_type=form.business_type.data.strip(),county=form.county.data,description=(form.description.data or "").strip())
-        db.session.add(item); db.session.commit(); flash("Application submitted for review.","success"); return redirect(url_for("main.dashboard"))
+        db.session.add(item)
+        db.session.flush()
+        db.session.add(AuditEvent(
+            actor_user_id=current_user.id,
+            application_id=item.id,
+            event_type="application_submitted",
+            previous_status="none",
+            new_status="pending",
+            notes="Business application submitted.",
+        ))
+        db.session.commit()
+        flash("Application submitted for review.", "success")
+        return redirect(url_for("main.dashboard"))
     body=f'<section class="panel"><h1>Business application</h1><p>Provide accurate information. An administrator will review your submission.</p><form method="post">{form.hidden_tag()}{field(form,"business_name",class_="input")}{field(form,"business_type",class_="input")}{field(form,"county",class_="input")}{field(form,"description",class_="input",rows=4)}{form.submit(class_="button")}</form></section>'
     return page("New application",body)
 @bp.get("/directory")
@@ -251,6 +263,14 @@ def edit_application(application_id):
             db.session.rollback()
             flash("This application is no longer editable because its review status changed.", "warning")
             return redirect(url_for("main.dashboard"))
+        db.session.add(AuditEvent(
+            actor_user_id=current_user.id,
+            application_id=application_id,
+            event_type="application_updated",
+            previous_status="pending",
+            new_status="pending",
+            notes="Owner updated business application details.",
+        ))
         db.session.commit()
         flash("Your pending application has been updated.", "success")
         return redirect(url_for("main.dashboard"))
