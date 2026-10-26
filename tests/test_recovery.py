@@ -25,6 +25,13 @@ def test_password_reset_request_is_generic_for_known_and_unknown_accounts(client
     assert len(sent) == 1
     assert sent[0][0] == "recover@example.com"
     assert sent[0][1] not in known.get_data(as_text=True)
+    # The signed URL must not disclose the stored password hash.
+    from itsdangerous import URLSafeTimedSerializer
+    with app.app_context():
+        token_data = URLSafeTimedSerializer(app.config["SECRET_KEY"], salt="password-recovery-v1").loads(sent[0][1])
+        user = User.query.filter_by(email="recover@example.com").one()
+        assert "password_hash" not in token_data
+        assert token_data["credential_fingerprint"] != user.password_hash
 
 
 def test_password_reset_changes_password_and_invalidates_token(client, app, monkeypatch):
