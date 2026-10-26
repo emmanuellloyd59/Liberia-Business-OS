@@ -617,3 +617,52 @@ def test_admin_overview_requires_admin_and_filters_applications(client, app):
     response = client.get("/admin/overview?q=does-not-exist")
     assert response.status_code == 200
     assert b"Unique Overview Search Shop" not in response.data
+
+
+
+def test_admin_csv_report_requires_admin(client):
+    register(client)
+    response = client.get("/admin/reports/applications.csv")
+    assert response.status_code == 403
+
+
+def test_admin_csv_report_filters_rows_and_neutralizes_spreadsheet_formulas(client, app):
+    import csv
+    from io import StringIO
+
+    with app.app_context():
+        owner = User(email="csv-owner@example.com", full_name="CSV Owner")
+        owner.set_password("Strong-test-password-123")
+        admin = User(email="csv-admin@example.com", full_name="CSV Admin", role="admin")
+        admin.set_password("CSV-admin-password-123")
+        db.session.add_all([owner, admin])
+        db.session.flush()
+        db.session.add_all([
+            BusinessApplication(
+                owner_id=owner.id, business_name="=HYPERLINK(\"https://evil.invalid\",\"click\")",
+                business_type="Retail", county="Montserrado", status="pending",
+                description="CSV formula test",
+            ),
+            BusinessApplication(
+                owner_id=owner.id, business_name="Different County Shop",
+                business_type="Retail", county="Bong", status="approved",
+                description="Should be filtered out",
+            ),
+        ])
+        db.session.commit()
+
+    client.post("/auth/login", data={
+        "email": "csv-admin@example.com", "password": "CSV-admin-password-123",
+    }, follow_redirects=True)
+    response = client.get("/admin/reports/applications.csv?status=pending&county=Montserrado")
+    assert response.status_code == 200
+    assert response.mimetype == "text/csv"
+    assert "attachment" in response.headers["Content-Disposition"]
+    assert response.headers["Cache-Control"] == "no-store"
+    rows = list(csv.reader(StringIO(response.get_data(as_text=True))))
+    assert rows[0][0:5] == ["Application ID", "Business name", "Business type", "County", "Status"]
+    assert len(rows) == 2
+    assert rows[1][1].startswith("'=HYPERLINK(")
+    assert rows[1][3] == "Montserrado"
+    assert rows[1][4] == "pending"
+    assert "Different County Shop" not in response.get_data(as_text=True)

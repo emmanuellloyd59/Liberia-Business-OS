@@ -1,4 +1,6 @@
-from flask import Blueprint, abort, request
+import csv
+from io import StringIO
+from flask import Blueprint, abort, request, url_for, Response, stream_with_context
 from flask_login import current_user, login_required
 from markupsafe import escape
 from sqlalchemy import or_
@@ -103,7 +105,8 @@ def admin_overview():
     for value in counties:
         selected = " selected" if county == value else ""
         body += f'<option value="{escape(value)}"{selected}>{escape(value)}</option>'
-    body += '<button class="button" type="submit">Apply filters</button> <a href="/admin/overview">Clear</a></form></section>'
+    body += '<button class="button" type="submit">Apply filters</button> <a href="/admin/overview">Clear</a></form>'
+    body += f'<p><a class="button" style="background:#102b46" href="{url_for("workspace.admin_application_csv", q=q, status=status, county=county)}">Export filtered applications (CSV)</a></p></section>'
     body += '<section class="panel"><h2>Applications</h2>'
     if not pagination.items:
         body += "<p>No applications match these filters.</p>"
@@ -124,3 +127,81 @@ def admin_overview():
             body += f' <a href="/admin/overview?q={escape(q)}&status={escape(status)}&county={escape(county)}&page={pagination.next_num}">Next</a>'
         body += "</nav>"
     return page("Business management", body + "</section>")
+
+
+
+def _csv_safe(value):
+    """Prevent spreadsheet programs from interpreting exported text as formulas."""
+    value = "" if value is None else str(value)
+    if value.startswith(("=", "+", "-", "@", "\t", "\r")):
+        return "'" + value
+    return value
+
+
+@bp.get("/admin/reports/applications.csv")
+@login_required
+def admin_application_csv():
+    if not current_user.is_admin:
+        abort(403)
+
+    q = request.args.get("q", "").strip()[:100]
+    status = request.args.get("status", "").strip()
+    county = request.args.get("county", "").strip()
+    counties = {
+        "Bomi", "Bong", "Gbarpolu", "Grand Bassa", "Grand Cape Mount",
+        "Grand Gedeh", "Grand Kru", "Lofa", "Margibi", "Maryland",
+        "Montserrado", "Nimba", "River Cess", "River Gee", "Sinoe",
+    }
+    statuses = {"pending", "approved", "rejected"}
+    query = BusinessApplication.query
+    if q:
+        term = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        pattern = f"%{term}%"
+        query = query.filter(or_(
+            BusinessApplication.business_name.ilike(pattern, escape="\\"),
+            BusinessApplication.owner.has(or_(
+                User.email.ilike(pattern, escape="\\"),
+                User.full_name.ilike(pattern, escape="\\"),
+            )),
+        ))
+    if status in statuses:
+        query = query.filter_by(status=status)
+    if county in counties:
+        query = query.filter_by(county=county)
+
+    def generate():
+        buffer = StringIO()
+        writer = csv.writer(buffer)
+        writer.writerow([
+            "Application ID", "Business name", "Business type", "County",
+            "Status", "Applicant name", "Applicant email", "Description",
+            "Review notes", "Submitted at UTC", "Updated at UTC",
+        ])
+        yield buffer.getvalue()
+        buffer.seek(0)
+        buffer.truncate(0)
+        for item in query.order_by(
+            BusinessApplication.created_at.desc(), BusinessApplication.id.desc()
+        ).yield_per(200):
+            writer.writerow([
+                item.id,
+                _csv_safe(item.business_name),
+                _csv_safe(item.business_type),
+                _csv_safe(item.county),
+                _csv_safe(item.status),
+                _csv_safe(item.owner.full_name),
+                _csv_safe(item.owner.email),
+                _csv_safe(item.description),
+                _csv_safe(item.review_notes),
+                item.created_at.strftime("%Y-%m-%d %H:%M:%S UTC") if item.created_at else "",
+                item.updated_at.strftime("%Y-%m-%d %H:%M:%S UTC") if item.updated_at else "",
+            ])
+            yield buffer.getvalue()
+            buffer.seek(0)
+            buffer.truncate(0)
+
+    response = Response(stream_with_context(generate()), mimetype="text/csv; charset=utf-8")
+    response.headers["Content-Disposition"] = 'attachment; filename="liberia-business-applications.csv"'
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
