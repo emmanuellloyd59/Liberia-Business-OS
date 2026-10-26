@@ -523,3 +523,50 @@ def test_owner_application_edit_is_recorded_in_audit_trail(client, app):
         assert events[1].previous_status == "pending"
         assert events[1].new_status == "pending"
         assert events[1].notes == "Owner updated business application details."
+
+
+def test_owner_overview_shows_only_current_users_metrics(client):
+    register(client, "overview-one@example.com", "Overview Owner One")
+    client.post("/applications/new", data={
+        "business_name": "Owner One Overview Shop",
+        "business_type": "Retail",
+        "county": "Montserrado",
+        "description": "Owner one test",
+    })
+    response = client.get("/dashboard/overview")
+    assert response.status_code == 200
+    assert b"Your business overview" in response.data
+    assert b"Applications</p><h2>1</h2>" in response.data
+
+    client.post("/auth/logout", follow_redirects=True)
+    register(client, "overview-two@example.com", "Overview Owner Two")
+    response = client.get("/dashboard/overview")
+    assert response.status_code == 200
+    assert b"Applications</p><h2>0</h2>" in response.data
+
+
+def test_admin_overview_requires_admin_and_filters_applications(client, app):
+    register(client, "overview-owner@example.com", "Overview Search Owner")
+    client.post("/applications/new", data={
+        "business_name": "Unique Overview Search Shop",
+        "business_type": "Retail",
+        "county": "Montserrado",
+        "description": "Admin filter test",
+    })
+    assert client.get("/admin/overview").status_code == 403
+    client.post("/auth/logout", follow_redirects=True)
+    with app.app_context():
+        admin = User(email="overview-admin@example.com", full_name="Overview Admin", role="admin")
+        admin.set_password("Overview-admin-password-123")
+        db.session.add(admin)
+        db.session.commit()
+    client.post("/auth/login", data={
+        "email": "overview-admin@example.com",
+        "password": "Overview-admin-password-123",
+    }, follow_redirects=True)
+    response = client.get("/admin/overview?q=Unique+Overview+Search+Shop&status=pending")
+    assert response.status_code == 200
+    assert b"Unique Overview Search Shop" in response.data
+    response = client.get("/admin/overview?q=does-not-exist")
+    assert response.status_code == 200
+    assert b"Unique Overview Search Shop" not in response.data
