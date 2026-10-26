@@ -4,7 +4,7 @@ from sqlalchemy import or_, update
 from sqlalchemy.exc import IntegrityError
 from flask_wtf import FlaskForm
 from markupsafe import escape
-from wtforms import StringField,PasswordField,SelectChoice,SelectField,TextAreaField,SubmitField
+from wtforms import StringField,PasswordField,SelectField,TextAreaField,SubmitField
 from wtforms.validators import DataRequired,Email,Length
 from .extensions import db, limiter
 from .models import User,BusinessApplication,AuditEvent
@@ -22,7 +22,7 @@ class LoginForm(FlaskForm):
 class ApplicationForm(FlaskForm):
     business_name=StringField("Business name",validators=[DataRequired(),Length(min=2,max=180)])
     business_type=StringField("Business type",validators=[DataRequired(),Length(min=2,max=100)])
-    county=SelectField("County",choices=[SelectChoice(value=x,label=x) for x in ["Bomi","Bong","Gbarpolu","Grand Bassa","Grand Cape Mount","Grand Gedeh","Grand Kru","Lofa","Margibi","Maryland","Montserrado","Nimba","River Cess","River Gee","Sinoe"]],validators=[DataRequired()])
+    county=SelectField("County",choices=[(x, x) for x in ["Bomi","Bong","Gbarpolu","Grand Bassa","Grand Cape Mount","Grand Gedeh","Grand Kru","Lofa","Margibi","Maryland","Montserrado","Nimba","River Cess","River Gee","Sinoe"]],validators=[DataRequired()])
     description=TextAreaField("Business description",validators=[Length(max=4000)])
     submit=SubmitField("Submit application")
 class ReviewForm(FlaskForm):
@@ -153,6 +153,7 @@ def directory():
             f'<article><h2>{escape(item.business_name)}</h2>'
             f'<p>{escape(item.business_type)} · {escape(item.county)} County</p>'
             f'<p>{escape(item.description)}</p>'
+            f'<p><a href="{url_for("main.public_business_profile", application_id=item.id)}">View business profile</a></p>'
             '<span class="status approved">Approved</span></article><hr>'
         )
     if pagination.pages > 1:
