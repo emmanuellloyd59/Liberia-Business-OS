@@ -259,7 +259,7 @@ def test_admin_review_writes_atomic_audit_event(client, app):
     response = client.post("/admin/applications/" + str(application_id) + "/review", data={"status": "approved", "review_notes": "Ownership verified"}, follow_redirects=True)
     assert response.status_code == 200
     with app.app_context():
-        event = AuditEvent.query.filter_by(application_id=application_id).one()
+        event = AuditEvent.query.filter_by(application_id=application_id, event_type="application_reviewed").one()
         assert event.actor_user_id == User.query.filter_by(email="audit-admin@example.com").one().id
         assert event.event_type == "application_reviewed"
         assert event.previous_status == "pending"
