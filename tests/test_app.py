@@ -523,3 +523,50 @@ def test_owner_application_edit_is_recorded_in_audit_trail(client, app):
         assert events[1].previous_status == "pending"
         assert events[1].new_status == "pending"
         assert events[1].notes == "Owner updated business application details."
+
+
+def test_non_admin_cannot_access_audit_history(client):
+    register(client)
+    response = client.get("/admin/audit")
+    assert response.status_code == 403
+
+
+def test_admin_audit_history_is_read_only_and_escapes_notes(client, app):
+    register(client, "audit-owner@example.com", "Audit Owner")
+    response = client.post(
+        "/applications/new",
+        data={
+            "business_name": "Audit Trail Shop",
+            "business_type": "Retail",
+            "county": "Montserrado",
+            "description": "Audit test",
+        },
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+
+    client.post("/auth/logout", follow_redirects=True)
+    with app.app_context():
+        admin = User(email="audit-admin@example.com", full_name="Audit Admin", role="admin")
+        admin.set_password("Admin-test-password-123")
+        db.session.add(admin)
+        db.session.commit()
+        event = AuditEvent.query.filter_by(event_type="application_submitted").one()
+        event.notes = "<script>alert(1)</script>"
+        db.session.commit()
+        event_id = event.id
+
+    client.post(
+        "/auth/login",
+        data={"email": "audit-admin@example.com", "password": "Admin-test-password-123"},
+        follow_redirects=True,
+    )
+    response = client.get("/admin/audit")
+    assert response.status_code == 200
+    assert b"Audit Trail Shop" in response.data
+    assert b"Application Submitted" in response.data
+    assert b"<script>alert(1)</script>" not in response.data
+    assert b"&lt;script&gt;alert(1)&lt;/script&gt;" in response.data
+    assert client.get("/admin/audit?page=-1").status_code == 200
+    with app.app_context():
+        assert db.session.get(AuditEvent, event_id) is not None
