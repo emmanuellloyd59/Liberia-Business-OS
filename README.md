@@ -63,3 +63,14 @@ The render.yaml file describes a Render web service and managed PostgreSQL datab
 - Exports include application status, applicant contact details, descriptions, review notes, and timestamps, and are restricted to authenticated administrators.
 - CSV cells beginning with spreadsheet formula characters are neutralized to reduce formula-injection risk. Export responses are marked no-store.
 - Reports are generated from existing application data; no database schema changes or production data rewrites are required.
+
+
+## Version 3 foundation: password recovery
+
+- Users can request a password-reset link from the sign-in page at `/auth/password-reset`.
+- Reset requests return the same public response for known and unknown addresses to reduce account enumeration.
+- Links are signed, expire after 30 minutes, and are bound to the current password hash. After a successful reset, the same link cannot be reused.
+- Passwords must be 12–128 characters. The reset flow does not require a schema migration or rewrite existing accounts.
+- Email delivery is disabled unless SMTP is configured. Set `APP_BASE_URL` to the canonical HTTPS site URL, `SMTP_HOST`, `SMTP_PORT`, and `SMTP_FROM`; configure `SMTP_USERNAME` and `SMTP_PASSWORD` when required by the provider. Set `SMTP_USE_SSL=true` for implicit TLS (commonly port 465); otherwise STARTTLS is used (commonly port 587). Never commit SMTP credentials. Verify provider-specific settings before enabling the feature in production.
+- Without SMTP configuration, requests still receive the generic response but no email is sent; do not treat that as a delivered email.
+- Automated tests cover generic responses, password update, token invalidation, invalid links, and password validation.
