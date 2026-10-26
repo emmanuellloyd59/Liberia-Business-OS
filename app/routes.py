@@ -1,3 +1,4 @@
+from datetime import timezone
 from flask import Blueprint,abort,flash,redirect,render_template_string,request,url_for
 from flask_login import current_user,login_required,login_user,logout_user
 from sqlalchemy import or_, update
@@ -341,7 +342,7 @@ def admin_audit():
             business_name = application.business_name if application else "Unavailable application"
             created = event.created_at
             if created.tzinfo is None:
-                created = created.replace(tzinfo=__import__("datetime").timezone.utc)
+                created = created.replace(tzinfo=timezone.utc)
             timestamp = created.astimezone(__import__("datetime").timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
             transition = f"{event.previous_status} → {event.new_status}"
             body += (
