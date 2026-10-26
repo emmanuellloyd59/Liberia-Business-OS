@@ -453,3 +453,73 @@ def test_invalid_business_edit_does_not_change_record(client, app):
         item = db.session.get(BusinessApplication, application_id)
         assert item.business_name == "Valid Shop"
         assert item.description == "Valid"
+
+
+
+def test_application_submission_is_recorded_in_audit_trail(client, app):
+    register(client, "submission-audit@example.com", "Submission Audit Owner")
+    response = client.post(
+        "/applications/new",
+        data={
+            "business_name": "Audit Submission Shop",
+            "business_type": "Retail",
+            "county": "Montserrado",
+            "description": "Submitted for audit coverage",
+        },
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+    with app.app_context():
+        item = BusinessApplication.query.filter_by(
+            business_name="Audit Submission Shop"
+        ).one()
+        event = AuditEvent.query.filter_by(
+            application_id=item.id, event_type="application_submitted"
+        ).one()
+        actor = User.query.filter_by(email="submission-audit@example.com").one()
+        assert event.actor_user_id == actor.id
+        assert event.previous_status == "none"
+        assert event.new_status == "pending"
+        assert event.notes == "Business application submitted."
+
+
+def test_owner_application_edit_is_recorded_in_audit_trail(client, app):
+    register(client, "edit-audit@example.com", "Edit Audit Owner")
+    client.post(
+        "/applications/new",
+        data={
+            "business_name": "Audit Edit Shop",
+            "business_type": "Retail",
+            "county": "Montserrado",
+            "description": "Before edit",
+        },
+    )
+    with app.app_context():
+        item = BusinessApplication.query.filter_by(
+            business_name="Audit Edit Shop"
+        ).one()
+        application_id = item.id
+    response = client.post(
+        f"/applications/{application_id}/edit",
+        data={
+            "business_name": "Audit Edit Shop Updated",
+            "business_type": "Retail",
+            "county": "Bong",
+            "description": "After edit",
+        },
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+    with app.app_context():
+        item = db.session.get(BusinessApplication, application_id)
+        events = AuditEvent.query.filter_by(
+            application_id=application_id
+        ).order_by(AuditEvent.id.asc()).all()
+        assert item.business_name == "Audit Edit Shop Updated"
+        assert [event.event_type for event in events] == [
+            "application_submitted", "application_updated"
+        ]
+        assert events[1].actor_user_id == item.owner_id
+        assert events[1].previous_status == "pending"
+        assert events[1].new_status == "pending"
+        assert events[1].notes == "Owner updated business application details."
