@@ -305,3 +305,63 @@ def public_business_profile(application_id):
         '<p><a href="/directory">Back to directory</a></p></section>'
     )
     return page("Business profile", body)
+
+
+@bp.get("/admin/audit")
+@login_required
+def admin_audit():
+    """Show a read-only, paginated audit history to administrators only."""
+    if not current_user.is_admin:
+        abort(403)
+
+    page_number = request.args.get("page", 1, type=int) or 1
+    pagination = (
+        AuditEvent.query
+        .order_by(AuditEvent.created_at.desc(), AuditEvent.id.desc())
+        .paginate(page=max(page_number, 1), per_page=50, error_out=False)
+    )
+    body = (
+        '<section class="panel"><p class="green"><b>SECURITY & ACCOUNTABILITY</b></p>'
+        '<h1>Audit history</h1>'
+        '<p>Read-only record of business application submissions, owner edits, and administrator decisions.</p>'
+    )
+    if not pagination.items:
+        body += '<p>No audit events have been recorded yet.</p>'
+    else:
+        body += (
+            '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
+            '<thead><tr><th align="left">Time (UTC)</th><th align="left">Actor</th>'
+            '<th align="left">Event</th><th align="left">Business application</th>'
+            '<th align="left">Status change</th><th align="left">Notes</th></tr></thead><tbody>'
+        )
+        for event in pagination.items:
+            actor = db.session.get(User, event.actor_user_id)
+            application = db.session.get(BusinessApplication, event.application_id)
+            actor_email = actor.email if actor else "Unavailable account"
+            business_name = application.business_name if application else "Unavailable application"
+            created = event.created_at
+            if created.tzinfo is None:
+                created = created.replace(tzinfo=__import__("datetime").timezone.utc)
+            timestamp = created.astimezone(__import__("datetime").timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+            transition = f"{event.previous_status} → {event.new_status}"
+            body += (
+                '<tr>'
+                f'<td style="padding:10px 8px;border-top:1px solid #edf0f4;white-space:nowrap">{escape(timestamp)}</td>'
+                f'<td style="padding:10px 8px;border-top:1px solid #edf0f4">{escape(actor_email)}</td>'
+                f'<td style="padding:10px 8px;border-top:1px solid #edf0f4">{escape(event.event_type.replace("_", " ").title())}</td>'
+                f'<td style="padding:10px 8px;border-top:1px solid #edf0f4">{escape(business_name)}</td>'
+                f'<td style="padding:10px 8px;border-top:1px solid #edf0f4">{escape(transition)}</td>'
+                f'<td style="padding:10px 8px;border-top:1px solid #edf0f4">{escape(event.notes)}</td>'
+                '</tr>'
+            )
+        body += '</tbody></table></div>'
+    if pagination.pages > 1:
+        body += '<nav aria-label="Audit history pages">'
+        if pagination.has_prev:
+            body += f'<a href="{url_for("main.admin_audit", page=pagination.prev_num)}">Previous</a> '
+        body += f'<span>Page {pagination.page} of {pagination.pages}</span>'
+        if pagination.has_next:
+            body += f' <a href="{url_for("main.admin_audit", page=pagination.next_num)}">Next</a>'
+        body += '</nav>'
+    body += '<p><a href="/admin/applications">Return to application review</a></p></section>'
+    return page("Audit history", body)
