@@ -1,6 +1,6 @@
 import csv
 from io import StringIO
-from flask import Blueprint, abort, request, url_for, Response
+from flask import Blueprint, abort, request, url_for, Response, stream_with_context
 from flask_login import current_user, login_required
 from markupsafe import escape
 from sqlalchemy import or_
@@ -200,7 +200,7 @@ def admin_application_csv():
             buffer.seek(0)
             buffer.truncate(0)
 
-    response = Response(generate(), mimetype="text/csv; charset=utf-8")
+    response = Response(stream_with_context(generate()), mimetype="text/csv; charset=utf-8")
     response.headers["Content-Disposition"] = 'attachment; filename="liberia-business-applications.csv"'
     response.headers["Cache-Control"] = "no-store"
     response.headers["X-Content-Type-Options"] = "nosniff"
