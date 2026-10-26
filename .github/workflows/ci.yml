@@ -24,4 +24,4 @@ jobs:
       - name: Run test suite
         env:
           FLASK_CONFIG: testing
-        run: pytest -q
+        run: python -m pytest -q
