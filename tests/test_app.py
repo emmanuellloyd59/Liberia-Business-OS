@@ -335,3 +335,121 @@ def test_directory_paginates_approved_businesses(client, app):
     assert second_page.status_code == 200
     assert b"Page 2 of 2" in second_page.data
     assert b"Approved Shop 29" in second_page.data
+
+
+
+def test_owner_can_edit_only_their_own_pending_application(client, app):
+    register(client, "profile-owner@example.com", "Profile Owner")
+    client.post(
+        "/applications/new",
+        data={"business_name": "Original Shop", "business_type": "Retail",
+              "county": "Montserrado", "description": "Original description"},
+    )
+    with app.app_context():
+        item = BusinessApplication.query.filter_by(business_name="Original Shop").one()
+        application_id = item.id
+    response = client.post(
+        f"/applications/{application_id}/edit",
+        data={"business_name": "Updated Shop", "business_type": "Wholesale",
+              "county": "Bong", "description": "Updated description", "submit": "Submit application"},
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+    assert b"Updated Shop" in response.data
+    with app.app_context():
+        item = db.session.get(BusinessApplication, application_id)
+        assert item.business_name == "Updated Shop"
+        assert item.business_type == "Wholesale"
+        assert item.county == "Bong"
+        assert item.status == "pending"
+
+
+def test_owner_cannot_edit_another_owners_application(client, app):
+    register(client, "profile-one@example.com", "Profile One")
+    client.post(
+        "/applications/new",
+        data={"business_name": "Private Shop", "business_type": "Retail",
+              "county": "Montserrado", "description": "Private details"},
+    )
+    with app.app_context():
+        application_id = BusinessApplication.query.filter_by(business_name="Private Shop").one().id
+    client.post("/auth/logout", follow_redirects=True)
+    register(client, "profile-two@example.com", "Profile Two")
+    assert client.get(f"/applications/{application_id}/edit").status_code == 404
+    client.post(
+        f"/applications/{application_id}/edit",
+        data={"business_name": "Hijacked Shop", "business_type": "Retail",
+              "county": "Nimba", "description": "tampered"},
+    )
+    with app.app_context():
+        item = db.session.get(BusinessApplication, application_id)
+        assert item.business_name == "Private Shop"
+        assert item.description == "Private details"
+
+
+def test_reviewed_application_cannot_be_edited(client, app):
+    register(client, "reviewed-owner@example.com", "Reviewed Owner")
+    client.post(
+        "/applications/new",
+        data={"business_name": "Reviewed Shop", "business_type": "Retail",
+              "county": "Montserrado", "description": "Before review"},
+    )
+    with app.app_context():
+        item = BusinessApplication.query.filter_by(business_name="Reviewed Shop").one()
+        item.status = "approved"
+        application_id = item.id
+        db.session.commit()
+    response = client.post(
+        f"/applications/{application_id}/edit",
+        data={"business_name": "Changed After Approval", "business_type": "Retail",
+              "county": "Montserrado", "description": "tampered"},
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+    with app.app_context():
+        item = db.session.get(BusinessApplication, application_id)
+        assert item.business_name == "Reviewed Shop"
+        assert item.status == "approved"
+
+
+def test_public_profile_only_resolves_approved_businesses(client, app):
+    register(client, "public-profile@example.com", "Public Profile Owner")
+    client.post(
+        "/applications/new",
+        data={"business_name": "Public Profile Shop", "business_type": "Retail",
+              "county": "Montserrado", "description": "Public profile text"},
+    )
+    with app.app_context():
+        item = BusinessApplication.query.filter_by(business_name="Public Profile Shop").one()
+        application_id = item.id
+    assert client.get(f"/directory/{application_id}").status_code == 404
+    client.post("/auth/logout", follow_redirects=True)
+    with app.app_context():
+        item = db.session.get(BusinessApplication, application_id)
+        item.status = "approved"
+        db.session.commit()
+    response = client.get(f"/directory/{application_id}")
+    assert response.status_code == 200
+    assert b"Public Profile Shop" in response.data
+    assert b"Public profile text" in response.data
+
+
+def test_invalid_business_edit_does_not_change_record(client, app):
+    register(client, "invalid-edit@example.com", "Invalid Edit Owner")
+    client.post(
+        "/applications/new",
+        data={"business_name": "Valid Shop", "business_type": "Retail",
+              "county": "Montserrado", "description": "Valid"},
+    )
+    with app.app_context():
+        application_id = BusinessApplication.query.filter_by(business_name="Valid Shop").one().id
+    response = client.post(
+        f"/applications/{application_id}/edit",
+        data={"business_name": "", "business_type": "Retail",
+              "county": "Montserrado", "description": "Attempted invalid edit"},
+    )
+    assert response.status_code == 200
+    with app.app_context():
+        item = db.session.get(BusinessApplication, application_id)
+        assert item.business_name == "Valid Shop"
+        assert item.description == "Valid"
