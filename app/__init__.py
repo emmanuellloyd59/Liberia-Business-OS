@@ -57,8 +57,10 @@ def create_app(config_name=None, test_config=None):
     from . import models
     from .routes import bp
     from .workspace import bp as workspace_bp
+    from .recovery import bp as recovery_bp
     app.register_blueprint(bp)
     app.register_blueprint(workspace_bp)
+    app.register_blueprint(recovery_bp)
 
     @app.get("/")
     def index():
