@@ -4,6 +4,8 @@ SMTP is optional for development, but must be configured for delivery. The reset
 request endpoint always returns the same public response to prevent account
 enumeration. Tokens are invalidated when the account password changes.
 """
+import hashlib
+import hmac
 import os
 import smtplib
 from email.message import EmailMessage
@@ -29,8 +31,14 @@ def _serializer():
     return URLSafeTimedSerializer(current_app.config["SECRET_KEY"], salt="password-recovery-v1")
 
 
+def _credential_fingerprint(password_hash):
+    secret = current_app.config["SECRET_KEY"].encode("utf-8")
+    return hmac.new(secret, password_hash.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
 def _token_for(user):
-    return _serializer().dumps({"uid": user.id, "password_hash": user.password_hash})
+    # Store only a keyed fingerprint, never the actual password hash, in the URL.
+    return _serializer().dumps({"uid": user.id, "credential_fingerprint": _credential_fingerprint(user.password_hash)})
 
 
 def _user_from_token(token):
@@ -41,7 +49,7 @@ def _user_from_token(token):
     if not isinstance(data, dict) or not isinstance(data.get("uid"), int):
         return None
     user = db.session.get(User, data["uid"])
-    if not user or not user.is_active or data.get("password_hash") != user.password_hash:
+    if not user or not user.is_active or not hmac.compare_digest(data.get("credential_fingerprint", ""), _credential_fingerprint(user.password_hash)):
         return None
     return user
 
