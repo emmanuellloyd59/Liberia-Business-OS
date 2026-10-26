@@ -83,7 +83,7 @@ def dashboard():
     body='<section class="panel"><h1>Welcome, '+str(escape(current_user.full_name))+'</h1><p>Manage your business applications and track their review status.</p><a class="button" href="/applications/new">New business application</a></section><section class="panel"><h2>Your applications</h2>'
     if not items: body+='<p>No applications yet. Submit your first business application to get started.</p>'
     for x in items:
-        body+=f'<article><h3>{escape(x.business_name)}</h3><p>{escape(x.business_type)} · {escape(x.county)} County</p><span class="status {x.status}">{x.status.title()}</span><p>{escape(x.review_notes)}</p></article><hr>'
+        body+=f'<article><h3>{escape(x.business_name)}</h3><p>{escape(x.business_type)} · {escape(x.county)} County</p><span class="status {x.status}">{x.status.title()}</span><p>{escape(x.review_notes)}</p>' + (f'<p><a href="/applications/{x.id}/edit">Edit pending application</a></p>' if x.status == "pending" else "") + '</article><hr>'
     return page("Dashboard",body+'</section>')
 @bp.route("/applications/new",methods=["GET","POST"])
 @login_required
@@ -214,3 +214,72 @@ def review(application_id):
         return redirect(url_for("main.admin_applications"))
     body=f'<section class="panel"><h1>Review {escape(item.business_name)}</h1><p>{escape(item.business_type)} · {escape(item.county)} County</p><p>{escape(item.description)}</p><form method="post">{form.hidden_tag()}{field(form,"status",class_="input")}{field(form,"review_notes",class_="input")}{form.submit(class_="button")}</form></section>'
     return page("Review application",body)
+
+
+@bp.route("/applications/<int:application_id>/edit", methods=["GET", "POST"])
+@login_required
+def edit_application(application_id):
+    # Scope the lookup to the current owner before revealing any record details.
+    item = BusinessApplication.query.filter_by(
+        id=application_id, owner_id=current_user.id
+    ).first_or_404()
+    if item.status != "pending":
+        flash("Only pending applications can be edited. Contact an administrator if a correction is needed after review.", "warning")
+        return redirect(url_for("main.dashboard"))
+
+    form = ApplicationForm(obj=item)
+    if form.validate_on_submit():
+        # A conditional update prevents a stale edit form from changing a record
+        # that an administrator reviewed while the owner was editing.
+        result = db.session.execute(
+            update(BusinessApplication)
+            .where(
+                BusinessApplication.id == application_id,
+                BusinessApplication.owner_id == current_user.id,
+                BusinessApplication.status == "pending",
+            )
+            .values(
+                business_name=form.business_name.data.strip(),
+                business_type=form.business_type.data.strip(),
+                county=form.county.data,
+                description=(form.description.data or "").strip(),
+            )
+        )
+        if result.rowcount != 1:
+            db.session.rollback()
+            flash("This application is no longer editable because its review status changed.", "warning")
+            return redirect(url_for("main.dashboard"))
+        db.session.commit()
+        flash("Your pending application has been updated.", "success")
+        return redirect(url_for("main.dashboard"))
+
+    body = (
+        f'<section class="panel"><h1>Edit pending application</h1>'
+        '<p>You can update your details while this application is awaiting review.</p>'
+        f'<form method="post">{form.hidden_tag()}'
+        f'{field(form, "business_name", class_="input")}'
+        f'{field(form, "business_type", class_="input")}'
+        f'{field(form, "county", class_="input")}'
+        f'{field(form, "description", class_="input", rows=4)}'
+        f'{form.submit(class_="button")}</form>'
+        '<p><a href="/dashboard">Return to dashboard</a></p></section>'
+    )
+    return page("Edit pending application", body)
+
+
+@bp.get("/directory/<int:application_id>")
+def public_business_profile(application_id):
+    # Never disclose pending or rejected applications through public profile URLs.
+    item = BusinessApplication.query.filter_by(
+        id=application_id, status="approved"
+    ).first_or_404()
+    body = (
+        '<section class="panel"><p class="green"><b>VERIFIED DIRECTORY LISTING</b></p>'
+        f'<h1>{escape(item.business_name)}</h1>'
+        f'<p><b>Business type:</b> {escape(item.business_type)}</p>'
+        f'<p><b>Location:</b> {escape(item.county)} County, Liberia</p>'
+        f'<h2>About this business</h2><p>{escape(item.description)}</p>'
+        '<span class="status approved">Approved</span>'
+        '<p><a href="/directory">Back to directory</a></p></section>'
+    )
+    return page("Business profile", body)
